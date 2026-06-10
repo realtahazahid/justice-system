@@ -1,0 +1,111 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String        @id @default(uuid())
+  name      String?
+  email     String        @unique
+  password  String
+  role      String        @default("ADMIN")
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  histories CaseHistory[]
+}
+
+model Client {
+  id        String    @id @default(uuid())
+  name      String
+  phone     String
+  cnic      String    @unique
+  address   String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? // For soft-delete support
+  cases     Case[]
+}
+
+model Case {
+  id            String        @id @default(uuid())
+  courtCategory String        // "Civil Court", "Tribunal Court", "High Court", "Supreme Court"
+  courtName     String
+  caseNumber    String
+  fileNo        String
+  referral      String?
+  partyName     String        // Plaintiff vs Defendant
+  clientId      String
+  client        Client        @relation(fields: [clientId], references: [id])
+  contactNumber String
+  notes         String?
+  status        String        // "ACTIVE", "CLOSED"
+  priority      String        // "HIGH", "MEDIUM", "LOW"
+  totalFee      Decimal       @default(0) @db.Decimal(12, 2)
+  paidFee       Decimal       @default(0) @db.Decimal(12, 2)
+  remainingFee  Decimal       @default(0) @db.Decimal(12, 2)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  deletedAt     DateTime?     // For soft-delete support
+  hearings      Hearing[]
+  payments      Payment[]
+  documents     Document[]
+  histories     CaseHistory[]
+}
+
+model Hearing {
+  id              String    @id @default(uuid())
+  caseId          String
+  case            Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  hearingDate     DateTime
+  nextHearingDate DateTime?
+  courtRemarks    String?
+  lawyerNotes     String?
+  eventType       String    // "HEARING", "MEETING", "FILING"
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime? // For soft-delete support
+}
+
+model Payment {
+  id          String    @id @default(uuid())
+  caseId      String
+  case        Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  amount      Decimal   @db.Decimal(12, 2)
+  paymentDate DateTime  @default(now())
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime? // For soft-delete support
+}
+
+model Document {
+  id        String    @id @default(uuid())
+  caseId    String
+  case      Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  name      String    // Original file name
+  type      String    // "ORDER", "JUDGMENT", "PETITION", "EVIDENCE", "OTHER"
+  mimeType  String    // e.g. "application/pdf"
+  content   Bytes     // Stores the PDF directly in the DB
+  size      Int       // Size in bytes
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? // For soft-delete support
+}
+
+model CaseHistory {
+  id          String   @id @default(uuid())
+  caseId      String
+  // Set to Restrict to block Case hard-deletion if history exists
+  case        Case     @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  action      String   // e.g. "Case Created", "Hearing Added", "Fee Payment Added", "Document Uploaded", "Case Closed"
+  description String
+  createdAt   DateTime @default(now())
+}
