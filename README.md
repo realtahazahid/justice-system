@@ -13,6 +13,4 @@ A production-ready, highly secure Legal Case Management System built for a Supre
 
 ---
 
-
-
 *If the user table is empty, this account is auto-seeded into the database using secure password hashes.*

@@ -128,6 +128,15 @@ export default function CaseDetailPage() {
   const [lawyerNotes, setLawyerNotes] = useState('');
   const [hearingLoading, setHearingLoading] = useState(false);
 
+  // Hearing Edit Form states
+  const [editingHearingId, setEditingHearingId] = useState<string | null>(null);
+  const [editHearingDate, setEditHearingDate] = useState('');
+  const [editNextHearingDate, setEditNextHearingDate] = useState('');
+  const [editEventType, setEditEventType] = useState('HEARING');
+  const [editCourtRemarks, setEditCourtRemarks] = useState('');
+  const [editLawyerNotes, setEditLawyerNotes] = useState('');
+  const [editHearingLoading, setEditHearingLoading] = useState(false);
+
   // 2. Payment Form
   const [payAmount, setPayAmount] = useState('');
   const [payNotes, setPayNotes] = useState('');
@@ -252,6 +261,119 @@ export default function CaseDetailPage() {
       console.error(err);
     } finally {
       setHearingLoading(false);
+    }
+  };
+
+  // Quick Status Change Handler
+  const handleStatusChange = async (newStatus: string) => {
+    setUpdateLoading(true);
+    try {
+      const res = await fetch(`/api/cases/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          courtCategory: caseData.courtCategory,
+          courtName: caseData.courtName,
+          caseNumber: caseData.caseNumber,
+          fileNo: caseData.fileNo,
+          referral: caseData.referral,
+          partyName: caseData.partyName,
+          clientId: caseData.clientId,
+          contactNumber: caseData.contactNumber,
+          notes: caseData.notes,
+          status: newStatus,
+          priority: caseData.priority,
+          totalFee: Number(caseData.totalFee),
+        }),
+      });
+
+      if (res.ok) {
+        setEditStatus(newStatus);
+        fetchCaseDetails();
+      } else {
+        alert('Failed to update case status');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error updating status');
+    } finally {
+      setUpdateLoading(false);
+    }
+  };
+
+  // Hearing Editing Handlers
+  const formatDateForInput = (dateStr: string | null | undefined) => {
+    if (!dateStr) return '';
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return '';
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      return `${year}-${month}-${day}T${hours}:${minutes}`;
+    } catch (e) {
+      return '';
+    }
+  };
+
+  const startEditingHearing = (h: Hearing) => {
+    setEditingHearingId(h.id);
+    setEditHearingDate(formatDateForInput(h.hearingDate));
+    setEditNextHearingDate(h.nextHearingDate ? formatDateForInput(h.nextHearingDate) : '');
+    setEditEventType(h.eventType);
+    setEditCourtRemarks(h.courtRemarks || '');
+    setEditLawyerNotes(h.lawyerNotes || '');
+  };
+
+  const handleUpdateHearing = async (e: React.FormEvent, hearingId: string) => {
+    e.preventDefault();
+    if (!editHearingDate) return;
+    setEditHearingLoading(true);
+    try {
+      const res = await fetch(`/api/hearings/${hearingId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          hearingDate: editHearingDate,
+          nextHearingDate: editNextHearingDate || null,
+          courtRemarks: editCourtRemarks || null,
+          lawyerNotes: editLawyerNotes || null,
+          eventType: editEventType,
+        }),
+      });
+
+      if (res.ok) {
+        setEditingHearingId(null);
+        fetchCaseDetails();
+      } else {
+        alert('Failed to update hearing');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error updating hearing');
+    } finally {
+      setEditHearingLoading(false);
+    }
+  };
+
+  const handleDeleteHearing = async (hearingId: string) => {
+    if (!confirm('Are you sure you want to delete this scheduled hearing? This action can be audited and soft-deletes the record.')) return;
+    try {
+      const res = await fetch(`/api/hearings/${hearingId}`, {
+        method: 'DELETE',
+      });
+
+      if (res.ok) {
+        setEditingHearingId(null);
+        fetchCaseDetails();
+      } else {
+        alert('Failed to delete hearing');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error deleting hearing');
     }
   };
 
@@ -406,10 +528,20 @@ export default function CaseDetailPage() {
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-2.5 shrink-0">
-            <span className={`text-[10px] px-2.5 py-1 rounded-lg border font-extrabold tracking-wider ${caseData.status === 'ACTIVE' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>
-              {caseData.status}
-            </span>
+          <div className="flex flex-wrap gap-2.5 shrink-0 items-center">
+            <select
+              value={caseData.status}
+              onChange={(e) => handleStatusChange(e.target.value)}
+              disabled={updateLoading}
+              className={`text-[10px] px-2.5 py-1 rounded-lg border font-extrabold tracking-wider bg-slate-950 focus:outline-none focus:border-amber-500 transition-all cursor-pointer ${
+                caseData.status === 'ACTIVE'
+                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                  : 'bg-slate-800 text-slate-400 border-slate-700'
+              }`}
+            >
+              <option value="ACTIVE" className="bg-slate-950 text-emerald-400">ACTIVE</option>
+              <option value="CLOSED" className="bg-slate-950 text-slate-400">CLOSED</option>
+            </select>
             <span className={`text-[10px] px-2.5 py-1 rounded-lg border font-extrabold tracking-wider ${getPriorityBadge(caseData.priority)}`}>
               PRIORITY: {caseData.priority}
             </span>
@@ -773,44 +905,156 @@ export default function CaseDetailPage() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {caseData.hearings.map((h) => (
-                    <div
-                      key={h.id}
-                      className="p-5 bg-slate-950/40 border border-slate-850 hover:border-slate-800 rounded-xl transition-all relative overflow-hidden"
-                    >
-                      <div className="absolute right-0 top-0 text-[10px] font-bold px-2 py-0.5 uppercase tracking-wider rounded-bl bg-amber-500/10 border-l border-b border-amber-500/20 text-amber-400">
-                        {h.eventType}
-                      </div>
+                  {caseData.hearings.map((h) => {
+                    const isEditingHearing = editingHearingId === h.id;
+                    return (
+                      <div
+                        key={h.id}
+                        className="p-5 bg-slate-950/40 border border-slate-850 hover:border-slate-800 rounded-xl transition-all relative overflow-hidden"
+                      >
+                        {isEditingHearing ? (
+                          <form onSubmit={(e) => handleUpdateHearing(e, h.id)} className="space-y-4 text-xs">
+                            <div className="flex justify-between items-center pb-2 border-b border-slate-850">
+                              <h4 className="text-xs font-bold text-amber-500">Edit Hearing / Event</h4>
+                              <button
+                                type="button"
+                                onClick={() => setEditingHearingId(null)}
+                                className="text-slate-400 hover:text-white text-xs font-bold"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                              <div>
+                                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                                  Hearing Date & Time
+                                </label>
+                                <input
+                                  type="datetime-local"
+                                  required
+                                  value={editHearingDate}
+                                  onChange={(e) => setEditHearingDate(e.target.value)}
+                                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white focus:outline-none focus:border-amber-500 transition-all font-semibold"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                                  Next Hearing Date (Tentative)
+                                </label>
+                                <input
+                                  type="datetime-local"
+                                  value={editNextHearingDate}
+                                  onChange={(e) => setEditNextHearingDate(e.target.value)}
+                                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white focus:outline-none focus:border-amber-500 transition-all font-semibold"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                                  Event Type
+                                </label>
+                                <select
+                                  value={editEventType}
+                                  onChange={(e) => setEditEventType(e.target.value)}
+                                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white focus:outline-none focus:border-amber-500 transition-all font-semibold"
+                                >
+                                  <option value="HEARING">HEARING</option>
+                                  <option value="MEETING">MEETING</option>
+                                  <option value="FILING">FILING</option>
+                                </select>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                                  Court Remarks
+                                </label>
+                                <input
+                                  type="text"
+                                  value={editCourtRemarks}
+                                  onChange={(e) => setEditCourtRemarks(e.target.value)}
+                                  placeholder="e.g. Adjourned till next date"
+                                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white placeholder-slate-650 focus:outline-none focus:border-amber-500 transition-all font-semibold"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                                  Advocate Private Notes
+                                </label>
+                                <textarea
+                                  value={editLawyerNotes}
+                                  onChange={(e) => setEditLawyerNotes(e.target.value)}
+                                  placeholder="Private notes..."
+                                  rows={2}
+                                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white placeholder-slate-650 focus:outline-none focus:border-amber-500 transition-all font-medium"
+                                />
+                              </div>
+                            </div>
+                            <div className="flex gap-2 justify-end pt-2">
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteHearing(h.id)}
+                                className="px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/25 border border-rose-500/20 text-rose-400 text-xs font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                Delete
+                              </button>
+                              <button
+                                type="submit"
+                                disabled={editHearingLoading}
+                                className="px-4 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-bold rounded-lg flex items-center justify-center gap-1 transition-all cursor-pointer"
+                              >
+                                {editHearingLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save Changes'}
+                              </button>
+                            </div>
+                          </form>
+                        ) : (
+                          <>
+                            <div className="absolute right-0 top-0 flex items-center">
+                              <button
+                                type="button"
+                                onClick={() => startEditingHearing(h)}
+                                className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-850 rounded mr-2 mt-1.5 transition-all cursor-pointer"
+                                title="Edit Event Details"
+                              >
+                                <Edit className="h-3.5 w-3.5" />
+                              </button>
+                              <div className="text-[10px] font-bold px-2 py-0.5 uppercase tracking-wider rounded-bl bg-amber-500/10 border-l border-b border-amber-500/20 text-amber-400">
+                                {h.eventType}
+                              </div>
+                            </div>
 
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-3.5">
-                        <div>
-                          <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">Hearing Date</p>
-                          <p className="text-xs font-extrabold text-white mt-0.5">{formatDate(h.hearingDate)}</p>
-                        </div>
-                        {h.nextHearingDate && (
-                          <div>
-                            <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">Next Hearing Date</p>
-                            <p className="text-xs font-extrabold text-amber-400 mt-0.5">{formatDate(h.nextHearingDate)}</p>
-                          </div>
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-3.5">
+                              <div>
+                                <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">Hearing Date</p>
+                                <p className="text-xs font-extrabold text-white mt-0.5">{formatDate(h.hearingDate)}</p>
+                              </div>
+                              {h.nextHearingDate && (
+                                <div>
+                                  <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">Next Hearing Date</p>
+                                  <p className="text-xs font-extrabold text-amber-400 mt-0.5">{formatDate(h.nextHearingDate)}</p>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                              <div>
+                                <p className="text-[9px] font-bold uppercase tracking-wider text-slate-550">Court Remarks</p>
+                                <p className="text-slate-350 font-bold mt-1 leading-relaxed bg-slate-950/60 p-2.5 rounded-lg border border-slate-850">
+                                  {h.courtRemarks || 'No remarks recorded.'}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-[9px] font-bold uppercase tracking-wider text-slate-550">Lawyer Notes</p>
+                                <p className="text-slate-350 font-bold mt-1 leading-relaxed bg-slate-950/60 p-2.5 rounded-lg border border-slate-850">
+                                  {h.lawyerNotes || 'No private notes.'}
+                                </p>
+                              </div>
+                            </div>
+                          </>
                         )}
                       </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                        <div>
-                          <p className="text-[9px] font-bold uppercase tracking-wider text-slate-550">Court Remarks</p>
-                          <p className="text-slate-350 font-bold mt-1 leading-relaxed bg-slate-950/60 p-2.5 rounded-lg border border-slate-850">
-                            {h.courtRemarks || 'No remarks recorded.'}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-[9px] font-bold uppercase tracking-wider text-slate-550">Lawyer Notes</p>
-                          <p className="text-slate-350 font-bold mt-1 leading-relaxed bg-slate-950/60 p-2.5 rounded-lg border border-slate-850">
-                            {h.lawyerNotes || 'No private notes.'}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
